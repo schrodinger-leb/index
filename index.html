@@ -65,7 +65,7 @@
       display:none; position:fixed; inset:0; z-index:250;
       background:rgba(0,0,0,.35); align-items:center; justify-content:center;
     }
-	
+
     .modal-overlay.open { display:flex; }
     .modal {
       background:var(--w); border:1px solid var(--border); border-radius:14px;
@@ -115,17 +115,14 @@
     .bar { height:6px; background:var(--border); border-radius:99px; }
     .fill { height:100%; background:var(--accent); border-radius:99px; }
 
-    .project { background:var(--w); border:1px solid var(--border); border-radius:10px; padding:24px; max-width:320px; }
+    /* ── Projects grid ── */
+    .projects-grid { display:flex; gap:20px; flex-wrap:wrap; }
+    .project { background:var(--w); border:1px solid var(--border); border-radius:10px; padding:24px; width:320px; }
     .project h3 { font-family:'Playfair Display',serif; font-size:18px; margin-bottom:8px; }
 
     /* unfinished card */
     .unfinished-card { background:var(--w); border:1px solid var(--border); border-radius:10px; padding:24px; max-width:320px; }
     .unfinished-card h3 { font-family:'Playfair Display',serif; font-size:18px; margin-bottom:8px; }
-      height:100%; border-radius:99px; width:0%;
-      background: repeating-linear-gradient(60deg,var(--accent),var(--accent) 8px,#e8b99a 8px,#e8b99a 16px);
-      background-size:200% 100%; animation:stripe 1.4s linear infinite;
-    }
-    @keyframes stripe { from{background-position:0% 0} to{background-position:100% 0} }
 
     .contact-grid { display:grid; grid-template-columns:1fr 1fr; gap:40px; }
     form { display:flex; flex-direction:column; gap:12px; }
@@ -166,7 +163,7 @@
         Projects <span class="arrow">▲</span>
       </div>
       <div class="nav-sub" id="projectsSub">
-        <a href="#projects" data-section="projects">About me Page</a>
+        <a href="#projects" data-section="projects">Projects</a>
       </div>
 
       <a href="#contact" data-section="contact">Contact</a>
@@ -208,10 +205,22 @@
     <section id="projects">
       <p class="tag">What I Built</p>
       <h2>My Projects</h2>
-      <div class="project">
-        <h3>About Me Page</h3>
-        <p>introducing me in detail.</p>
-        <a href="" target="_blank" class="btn">View</a>
+      <div class="projects-grid">
+        <div class="project">
+          <h3>About Me Page</h3>
+          <p>Introducing me in detail.</p>
+          <a href="./about-me/index.html" target="_blank" class="btn">View</a>
+        </div>
+        <div class="project">
+          <h3>Articles</h3>
+          <p>My thoughts and writings.</p>
+          <a href="./articles/index.html" target="_blank" class="btn">View</a>
+        </div>
+        <div class="project">
+          <h3>Student Form</h3>
+          <p>Information form design.</p>
+          <a href="./student-form/index.html" target="_blank" class="btn">View</a>
+        </div>
       </div>
     </section>
 
@@ -237,7 +246,7 @@
       <p class="tag">Still Cooking</p>
       <h2>Unfinished Projects</h2>
       <div class="unfinished-card">
-        <h3> Title</h3>
+        <h3>Title</h3>
         <p>place holder for desc</p>
       </div>
     </section>
@@ -303,7 +312,6 @@
 
     loginBtn.onclick = () => {
       if (loggedIn) {
-        /* logout */
         loggedIn = false;
         loginBtn.textContent = "Login";
         loginBtn.classList.remove("logged");
@@ -335,7 +343,7 @@
         showToast("Incorrect information.", "error");
       }
     };
-	
+
     document.getElementById("passwordInput").addEventListener("keydown", e => {
       if (e.key === "Enter") modalSubmit.click();
     });
@@ -345,5 +353,3 @@
   </script>
 </body>
 </html>
- 
-
