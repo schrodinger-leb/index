@@ -1,77 +1,275 @@
-import asyncio
-import socket
-from bleak import BleakClient
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BLE Bridge — Lebron Subrado</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --w:#fff; --bg:#f9f8f6; --border:#e5e2db; --text:#1a1a1a; --muted:#8a8680; --accent:#c8956c; --code-bg:#1a1a2e; }
  
-BT05_ADDRESS   = "7C:66:9D:73:7D:A7"
-UART_RX_CHAR   = "0000ffe1-0000-1000-8000-00805f9b34fb"
-RSSI_THRESHOLD = -85  # adjust based on testing
+    body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); }
  
-async def main():
-    print("Connecting to BT05...")
-    async with BleakClient(BT05_ADDRESS) as client:
-        print("BLE Connected!")
+    header {
+      background:var(--w); border-bottom:1px solid var(--border);
+      padding:20px 60px; display:flex; align-items:center; justify-content:space-between;
+    }
+    header a {
+      text-decoration:none; color:var(--muted); font-size:13px;
+      text-transform:uppercase; letter-spacing:.08em;
+      display:flex; align-items:center; gap:8px; transition:.2s;
+    }
+    header a:hover { color:var(--accent); }
  
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind(('localhost', 5000))
-        server.listen(1)
-        server.setblocking(True)
-        print("Waiting for Java connection on port 5000...")
+    .hero {
+      background:var(--w); border-bottom:1px solid var(--border);
+      padding:60px 60px 50px;
+    }
+    .tag { font-size:11px; letter-spacing:.15em; text-transform:uppercase; color:var(--accent); margin-bottom:12px; }
+    h1 { font-family:'Playfair Display',serif; font-size:clamp(28px,4vw,48px); margin-bottom:16px; }
+    .desc { color:var(--muted); font-size:15px; line-height:1.8; max-width:640px; }
  
-        loop = asyncio.get_event_loop()
-        conn, addr = await loop.run_in_executor(None, server.accept)
-        print(f"Java connected from {addr}!")
-        conn.setblocking(False)
+    .badges { display:flex; gap:10px; flex-wrap:wrap; margin-top:24px; }
+    .badge {
+      background:var(--bg); border:1px solid var(--border);
+      border-radius:99px; padding:6px 16px;
+      font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace;
+    }
  
-        autonomous_mode = False
-        last_cmd = None
-        check_counter = 0
+    .content { max-width:900px; margin:0 auto; padding:60px; }
  
-        while True:
-            try:
-                # Check RSSI every 50 loops
-                check_counter += 1
-                if check_counter >= 50:
-                    check_counter = 0
-                    try:
-                        rssi = await client.get_rssi()
-                        print(f"Signal strength: {rssi} dBm")
+    .section { margin-bottom:48px; }
+    .section h2 { font-family:'Playfair Display',serif; font-size:22px; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border); }
  
-                        if rssi < RSSI_THRESHOLD and not autonomous_mode:
-                            autonomous_mode = True
-                            await client.write_gatt_char(UART_RX_CHAR, b'A', response=False)
-                            print("OUT OF RANGE - Bot switching to autonomous!")
-                            try:
-                                conn.send(b'A')
-                            except:
-                                pass
+    .features { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:16px; }
+    .feature {
+      background:var(--w); border:1px solid var(--border); border-radius:10px;
+      padding:20px; display:flex; flex-direction:column; gap:8px;
+    }
+    .feature .icon { font-size:22px; }
+    .feature h3 { font-size:14px; font-weight:500; }
+    .feature p { font-size:13px; color:var(--muted); line-height:1.6; }
  
-                        elif rssi >= RSSI_THRESHOLD and autonomous_mode:
-                            autonomous_mode = False
-                            await client.write_gatt_char(UART_RX_CHAR, b'M', response=False)
-                            print("IN RANGE - Bot switching to manual!")
-                            try:
-                                conn.send(b'M')
-                            except:
-                                pass
-                    except Exception as e:
-                        print(f"RSSI error: {e}")
+    /* Flow diagram */
+    .flow {
+      display:flex; align-items:center; gap:0; flex-wrap:wrap;
+      background:var(--w); border:1px solid var(--border);
+      border-radius:12px; padding:28px 32px; gap:4px;
+    }
+    .flow-box {
+      background:var(--bg); border:1px solid var(--border);
+      border-radius:8px; padding:12px 18px; text-align:center;
+      font-size:13px; font-weight:500;
+    }
+    .flow-box span { display:block; font-size:11px; color:var(--muted); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+    .flow-arrow { font-size:20px; color:var(--accent); padding:0 8px; }
  
-                if not autonomous_mode:
-                    try:
-                        data = conn.recv(1)
-                        if data and data != last_cmd:
+    .code-wrapper {
+      background:var(--code-bg); border-radius:12px; overflow:hidden;
+      border:1px solid #2a2a3e;
+    }
+    .code-header {
+      background:#16213e; padding:12px 20px;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .code-header span { font-family:'JetBrains Mono',monospace; font-size:13px; color:#a0a0b0; }
+    .code-dots { display:flex; gap:6px; }
+    .code-dots span { width:12px; height:12px; border-radius:50%; }
+    .code-dots span:nth-child(1) { background:#ff5f57; }
+    .code-dots span:nth-child(2) { background:#febc2e; }
+    .code-dots span:nth-child(3) { background:#28c840; }
+    pre {
+      padding:28px; overflow-x:auto; font-family:'JetBrains Mono',monospace;
+      font-size:13px; line-height:1.7; color:#cdd6f4;
+      max-height:560px; overflow-y:auto;
+    }
+ 
+    .kw  { color:#cba6f7; }
+    .cm  { color:#6c7086; font-style:italic; }
+    .st  { color:#a6e3a1; }
+    .fn  { color:#89dceb; }
+    .nb  { color:#fab387; }
+    .bi  { color:#89b4fa; }
+    .dc  { color:#f9e2af; }
+ 
+    footer {
+      background:var(--w); border-top:1px solid var(--border);
+      padding:20px; text-align:center; color:var(--muted); font-size:13px;
+    }
+  </style>
+</head>
+<body>
+ 
+  <header>
+    <a href="https://schrodinger-leb.github.io/index/">
+      <span>←</span> Back to Portfolio
+    </a>
+    <span style="font-size:13px; color:var(--muted);">bridge.py</span>
+  </header>
+ 
+  <div class="hero">
+    <p class="tag">Project — Robotics</p>
+    <h1>Python BLE Bridge</h1>
+    <p class="desc">
+      An async Python script that acts as a middleware between the Java HandTracking
+      controller and the Arduino robot via BLE. It connects to the BT05 module over
+      Bluetooth, opens a TCP socket on port 5000 for Java to connect to, and relays
+      commands in real time. Also monitors RSSI signal strength and automatically
+      switches the robot to autonomous mode when the controller goes out of range.
+    </p>
+    <div class="badges">
+      <span class="badge">Python</span>
+      <span class="badge">asyncio</span>
+      <span class="badge">Bleak BLE</span>
+      <span class="badge">TCP Socket</span>
+      <span class="badge">BT05 / HM-10</span>
+      <span class="badge">RSSI Monitoring</span>
+    </div>
+  </div>
+ 
+  <div class="content">
+ 
+    <div class="section">
+      <h2>How It Works</h2>
+      <div class="flow">
+        <div class="flow-box">Java Controller<span>HandTracking.java</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">TCP Socket<span>localhost:5000</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">bridge.py<span>Python asyncio</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">BLE (GATT)<span>BT05 Module</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">Arduino Robot<span>F/B/L/R/S/A/M</span></div>
+      </div>
+    </div>
+ 
+    <div class="section">
+      <h2>Features</h2>
+      <div class="features">
+        <div class="feature">
+          <span class="icon">🔗</span>
+          <h3>BLE + TCP Bridge</h3>
+          <p>Connects to BT05 over Bluetooth and opens a TCP server for Java to send commands through.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">📶</span>
+          <h3>RSSI Monitoring</h3>
+          <p>Checks signal strength every 50 loops and switches the bot to autonomous if it drops below -85 dBm.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🤖</span>
+          <h3>Auto Mode Fallback</h3>
+          <p>Sends 'A' to the Arduino when out of range, and restores manual control ('M') when back in range.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">⚡</span>
+          <h3>Non-blocking I/O</h3>
+          <p>Uses asyncio and non-blocking sockets so BLE and TCP communication run concurrently without lag.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🔄</span>
+          <h3>Command Dedup</h3>
+          <p>Only forwards a command if it differs from the last one sent, reducing unnecessary BLE writes.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🛜</span>
+          <h3>GATT Write</h3>
+          <p>Writes directly to the BT05 UART characteristic (FFE1) using Bleak's async GATT API.</p>
+        </div>
+      </div>
+    </div>
+ 
+    <div class="section">
+      <h2>Source Code</h2>
+      <div class="code-wrapper">
+        <div class="code-header">
+          <div class="code-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <span>bridge.py</span>
+        </div>
+        <pre><code><span class="kw">import</span> <span class="bi">asyncio</span>
+<span class="kw">import</span> <span class="bi">socket</span>
+<span class="kw">from</span> <span class="bi">bleak</span> <span class="kw">import</span> <span class="bi">BleakClient</span>
+ 
+<span class="dc">BT05_ADDRESS</span>   = <span class="st">"7C:66:9D:73:7D:A7"</span>
+<span class="dc">UART_RX_CHAR</span>   = <span class="st">"0000ffe1-0000-1000-8000-00805f9b34fb"</span>
+<span class="dc">RSSI_THRESHOLD</span> = <span class="nb">-85</span>  <span class="cm"># adjust based on testing</span>
+ 
+<span class="kw">async def</span> <span class="fn">main</span>():
+    <span class="fn">print</span>(<span class="st">"Connecting to BT05..."</span>)
+    <span class="kw">async with</span> <span class="bi">BleakClient</span>(<span class="dc">BT05_ADDRESS</span>) <span class="kw">as</span> client:
+        <span class="fn">print</span>(<span class="st">"BLE Connected!"</span>)
+ 
+        server = <span class="bi">socket</span>.socket(<span class="bi">socket</span>.AF_INET, <span class="bi">socket</span>.SOCK_STREAM)
+        server.setsockopt(<span class="bi">socket</span>.SOL_SOCKET, <span class="bi">socket</span>.SO_REUSEADDR, <span class="nb">1</span>)
+        server.bind((<span class="st">'localhost'</span>, <span class="nb">5000</span>))
+        server.listen(<span class="nb">1</span>)
+        server.setblocking(<span class="kw">True</span>)
+        <span class="fn">print</span>(<span class="st">"Waiting for Java connection on port 5000..."</span>)
+ 
+        loop = <span class="bi">asyncio</span>.get_event_loop()
+        conn, addr = <span class="kw">await</span> loop.run_in_executor(<span class="kw">None</span>, server.accept)
+        <span class="fn">print</span>(<span class="st">f"Java connected from {addr}!"</span>)
+        conn.setblocking(<span class="kw">False</span>)
+ 
+        autonomous_mode = <span class="kw">False</span>
+        last_cmd        = <span class="kw">None</span>
+        check_counter   = <span class="nb">0</span>
+ 
+        <span class="kw">while True</span>:
+            <span class="kw">try</span>:
+                <span class="cm"># Check RSSI every 50 loops</span>
+                check_counter += <span class="nb">1</span>
+                <span class="kw">if</span> check_counter >= <span class="nb">50</span>:
+                    check_counter = <span class="nb">0</span>
+                    <span class="kw">try</span>:
+                        rssi = <span class="kw">await</span> client.get_rssi()
+                        <span class="fn">print</span>(<span class="st">f"Signal strength: {rssi} dBm"</span>)
+ 
+                        <span class="kw">if</span> rssi &lt; <span class="dc">RSSI_THRESHOLD</span> <span class="kw">and not</span> autonomous_mode:
+                            autonomous_mode = <span class="kw">True</span>
+                            <span class="kw">await</span> client.write_gatt_char(<span class="dc">UART_RX_CHAR</span>, <span class="st">b'A'</span>, response=<span class="kw">False</span>)
+                            <span class="fn">print</span>(<span class="st">"OUT OF RANGE - Bot switching to autonomous!"</span>)
+                            <span class="kw">try</span>: conn.send(<span class="st">b'A'</span>)
+                            <span class="kw">except</span>: <span class="kw">pass</span>
+ 
+                        <span class="kw">elif</span> rssi >= <span class="dc">RSSI_THRESHOLD</span> <span class="kw">and</span> autonomous_mode:
+                            autonomous_mode = <span class="kw">False</span>
+                            <span class="kw">await</span> client.write_gatt_char(<span class="dc">UART_RX_CHAR</span>, <span class="st">b'M'</span>, response=<span class="kw">False</span>)
+                            <span class="fn">print</span>(<span class="st">"IN RANGE - Bot switching to manual!"</span>)
+                            <span class="kw">try</span>: conn.send(<span class="st">b'M'</span>)
+                            <span class="kw">except</span>: <span class="kw">pass</span>
+ 
+                    <span class="kw">except Exception as</span> e:
+                        <span class="fn">print</span>(<span class="st">f"RSSI error: {e}"</span>)
+ 
+                <span class="kw">if not</span> autonomous_mode:
+                    <span class="kw">try</span>:
+                        data = conn.recv(<span class="nb">1</span>)
+                        <span class="kw">if</span> data <span class="kw">and</span> data != last_cmd:
                             last_cmd = data
-                            await client.write_gatt_char(UART_RX_CHAR, data, response=False)
-                            print(f"Sent: {data.decode()}")
-                    except BlockingIOError:
-                        pass
-                    except Exception as e:
-                        print(f"Recv error: {e}")
+                            <span class="kw">await</span> client.write_gatt_char(<span class="dc">UART_RX_CHAR</span>, data, response=<span class="kw">False</span>)
+                            <span class="fn">print</span>(<span class="st">f"Sent: {data.decode()}"</span>)
+                    <span class="kw">except</span> <span class="bi">BlockingIOError</span>:
+                        <span class="kw">pass</span>
+                    <span class="kw">except Exception as</span> e:
+                        <span class="fn">print</span>(<span class="st">f"Recv error: {e}"</span>)
  
-            except Exception as e:
-                print(f"Error: {e}")
+            <span class="kw">except Exception as</span> e:
+                <span class="fn">print</span>(<span class="st">f"Error: {e}"</span>)
  
-            await asyncio.sleep(0.01)
+            <span class="kw">await</span> <span class="bi">asyncio</span>.sleep(<span class="nb">0.01</span>)
  
-asyncio.run(main())
+<span class="bi">asyncio</span>.run(<span class="fn">main</span>())</code></pre>
+      </div>
+    </div>
+ 
+  </div>
+ 
+  <footer>&copy; 2026 Lebron Subrado. All rights reserved.</footer>
+ 
+</body>
+</html>
