@@ -1,162 +1,328 @@
-// Motor pins 
-#define IN1  8
-#define IN2  9
-#define ENA  5
-#define IN3  10
-#define IN4  11
-#define ENB  6
-
-// Front 
-#define TRIG_F  A1
-#define ECHO_F  A2
-
-// Left
-#define TRIG_L  A3
-#define ECHO_L  A4
-
-// Right
-#define TRIG_R  A5
-#define ECHO_R  4
-
-const int BASE_SPEED      = 160;   // 0-255 forward (speed 160 sa una)
-const int TURN_SPEED      = 70;    // speed during turns
-const int WALL_FOLLOW_CM  = 15;    // desired distance from right wall
-const int WALL_TOO_CLOSE  = 5;     // right wall steer left
-const int WALL_TOO_FAR    = 20;    // right wall  steer right 
-const int FRONT_STOP_CM   = 10;    // front wall  stop and turn 
-const int SHARP_STOP_CM   = 12;    // left wall too close steer right
-
-float ultrasonicCm(int trigPin, int echoPin) {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MazeSolver — Lebron Subrado</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --w:#fff; --bg:#f9f8f6; --border:#e5e2db; --text:#1a1a1a; --muted:#8a8680; --accent:#c8956c; --code-bg:#1a1a2e; }
+ 
+    body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); }
+ 
+    header {
+      background:var(--w); border-bottom:1px solid var(--border);
+      padding:20px 60px; display:flex; align-items:center; justify-content:space-between;
+    }
+    header a {
+      text-decoration:none; color:var(--muted); font-size:13px;
+      text-transform:uppercase; letter-spacing:.08em;
+      display:flex; align-items:center; gap:8px; transition:.2s;
+    }
+    header a:hover { color:var(--accent); }
+ 
+    .hero {
+      background:var(--w); border-bottom:1px solid var(--border);
+      padding:60px 60px 50px;
+    }
+    .tag { font-size:11px; letter-spacing:.15em; text-transform:uppercase; color:var(--accent); margin-bottom:12px; }
+    h1 { font-family:'Playfair Display',serif; font-size:clamp(28px,4vw,48px); margin-bottom:16px; }
+    .desc { color:var(--muted); font-size:15px; line-height:1.8; max-width:640px; }
+ 
+    .badges { display:flex; gap:10px; flex-wrap:wrap; margin-top:24px; }
+    .badge {
+      background:var(--bg); border:1px solid var(--border);
+      border-radius:99px; padding:6px 16px;
+      font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace;
+    }
+ 
+    .content { max-width:900px; margin:0 auto; padding:60px; }
+ 
+    .section { margin-bottom:48px; }
+    .section h2 { font-family:'Playfair Display',serif; font-size:22px; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+ 
+    .features { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:16px; }
+    .feature {
+      background:var(--w); border:1px solid var(--border); border-radius:10px;
+      padding:20px; display:flex; flex-direction:column; gap:8px;
+    }
+    .feature .icon { font-size:22px; }
+    .feature h3 { font-size:14px; font-weight:500; }
+    .feature p { font-size:13px; color:var(--muted); line-height:1.6; }
+ 
+    /* Pin table */
+    .pin-table { width:100%; border-collapse:collapse; font-size:14px; }
+    .pin-table th {
+      background:var(--text); color:var(--w);
+      padding:10px 16px; text-align:left; font-weight:500;
+    }
+    .pin-table td { padding:10px 16px; border-bottom:1px solid var(--border); }
+    .pin-table tr:last-child td { border-bottom:none; }
+    .pin-table tr:nth-child(even) td { background:#f3f1ee; }
+    .pin-table td:first-child { font-family:'JetBrains Mono',monospace; color:var(--accent); font-size:13px; }
+ 
+    .code-wrapper {
+      background:var(--code-bg); border-radius:12px; overflow:hidden;
+      border:1px solid #2a2a3e;
+    }
+    .code-header {
+      background:#16213e; padding:12px 20px;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .code-header span { font-family:'JetBrains Mono',monospace; font-size:13px; color:#a0a0b0; }
+    .code-dots { display:flex; gap:6px; }
+    .code-dots span { width:12px; height:12px; border-radius:50%; }
+    .code-dots span:nth-child(1) { background:#ff5f57; }
+    .code-dots span:nth-child(2) { background:#febc2e; }
+    .code-dots span:nth-child(3) { background:#28c840; }
+    pre {
+      padding:28px; overflow-x:auto; font-family:'JetBrains Mono',monospace;
+      font-size:13px; line-height:1.7; color:#cdd6f4;
+      max-height:560px; overflow-y:auto;
+    }
+ 
+    .kw  { color:#cba6f7; }
+    .cm  { color:#6c7086; font-style:italic; }
+    .st  { color:#a6e3a1; }
+    .nm  { color:#89b4fa; }
+    .fn  { color:#89dceb; }
+    .nb  { color:#fab387; }
+    .pp  { color:#f38ba8; }
+ 
+    footer {
+      background:var(--w); border-top:1px solid var(--border);
+      padding:20px; text-align:center; color:var(--muted); font-size:13px;
+    }
+  </style>
+</head>
+<body>
+ 
+  <header>
+    <a href="https://schrodinger-leb.github.io/index/">
+      <span>←</span> Back to Portfolio
+    </a>
+    <span style="font-size:13px; color:var(--muted);">MazeSolverReversed.ino</span>
+  </header>
+ 
+  <div class="hero">
+    <p class="tag">Project — Robotics</p>
+    <h1>Maze Solver Robot</h1>
+    <p class="desc">
+      An Arduino-based autonomous maze-solving robot that uses right-wall following logic
+      with three ultrasonic sensors to navigate through a maze. It continuously reads front,
+      left, and right distances to steer itself along walls and avoid dead ends.
+    </p>
+    <div class="badges">
+      <span class="badge">Arduino</span>
+      <span class="badge">C++</span>
+      <span class="badge">Ultrasonic Sensors</span>
+      <span class="badge">L298N Motor Driver</span>
+      <span class="badge">Right-Wall Following</span>
+    </div>
+  </div>
+ 
+  <div class="content">
+ 
+    <div class="section">
+      <h2>Features</h2>
+      <div class="features">
+        <div class="feature">
+          <span class="icon">🧱</span>
+          <h3>Right-Wall Following</h3>
+          <p>Keeps a target distance from the right wall to navigate through the maze automatically.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">📡</span>
+          <h3>3 Ultrasonic Sensors</h3>
+          <p>Front, left, and right HC-SR04 sensors for full spatial awareness of the surroundings.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">↩️</span>
+          <h3>Dead End Detection</h3>
+          <p>Stops and turns right when the front is blocked, handling corners and dead ends.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🎛️</span>
+          <h3>Smooth Steering</h3>
+          <p>Uses proportional error-based steering to smoothly follow the wall instead of harsh turns.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🚪</span>
+          <h3>Opening Detection</h3>
+          <p>Detects openings on the right side and turns into them to explore new paths.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🐛</span>
+          <h3>Serial Debug</h3>
+          <p>Prints front, left, and right distances to Serial Monitor for live debugging.</p>
+        </div>
+      </div>
+    </div>
+ 
+    <div class="section">
+      <h2>Pin Configuration</h2>
+      <div style="background:var(--w); border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+        <table class="pin-table">
+          <thead>
+            <tr><th>Pin</th><th>Component</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>IN1 / IN2 / ENA (8,9,5)</td><td>L298N Motor Driver</td><td>Left motor control</td></tr>
+            <tr><td>IN3 / IN4 / ENB (10,11,6)</td><td>L298N Motor Driver</td><td>Right motor control</td></tr>
+            <tr><td>TRIG_F / ECHO_F (A1, A2)</td><td>HC-SR04</td><td>Front distance</td></tr>
+            <tr><td>TRIG_L / ECHO_L (A3, A4)</td><td>HC-SR04</td><td>Left distance</td></tr>
+            <tr><td>TRIG_R / ECHO_R (A5, 4)</td><td>HC-SR04</td><td>Right distance</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+ 
+    <div class="section">
+      <h2>Source Code</h2>
+      <div class="code-wrapper">
+        <div class="code-header">
+          <div class="code-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <span>MazeSolverReversed.ino</span>
+        </div>
+        <pre><code><span class="cm">// Motor pins</span>
+<span class="pp">#define</span> <span class="nb">IN1</span>  <span class="nb">8</span>
+<span class="pp">#define</span> <span class="nb">IN2</span>  <span class="nb">9</span>
+<span class="pp">#define</span> <span class="nb">ENA</span>  <span class="nb">5</span>
+<span class="pp">#define</span> <span class="nb">IN3</span>  <span class="nb">10</span>
+<span class="pp">#define</span> <span class="nb">IN4</span>  <span class="nb">11</span>
+<span class="pp">#define</span> <span class="nb">ENB</span>  <span class="nb">6</span>
+<span class="cm">// Front</span>
+<span class="pp">#define</span> <span class="nb">TRIG_F</span>  <span class="nb">A1</span>
+<span class="pp">#define</span> <span class="nb">ECHO_F</span>  <span class="nb">A2</span>
+<span class="cm">// Left</span>
+<span class="pp">#define</span> <span class="nb">TRIG_L</span>  <span class="nb">A3</span>
+<span class="pp">#define</span> <span class="nb">ECHO_L</span>  <span class="nb">A4</span>
+<span class="cm">// Right</span>
+<span class="pp">#define</span> <span class="nb">TRIG_R</span>  <span class="nb">A5</span>
+<span class="pp">#define</span> <span class="nb">ECHO_R</span>  <span class="nb">4</span>
+ 
+<span class="kw">const int</span> <span class="nb">BASE_SPEED</span>     = <span class="nb">160</span>;
+<span class="kw">const int</span> <span class="nb">TURN_SPEED</span>     = <span class="nb">70</span>;
+<span class="kw">const int</span> <span class="nb">WALL_FOLLOW_CM</span> = <span class="nb">15</span>;
+<span class="kw">const int</span> <span class="nb">WALL_TOO_CLOSE</span> = <span class="nb">5</span>;
+<span class="kw">const int</span> <span class="nb">WALL_TOO_FAR</span>   = <span class="nb">20</span>;
+<span class="kw">const int</span> <span class="nb">FRONT_STOP_CM</span>  = <span class="nb">10</span>;
+<span class="kw">const int</span> <span class="nb">SHARP_STOP_CM</span>  = <span class="nb">12</span>;
+ 
+<span class="kw">float</span> <span class="fn">ultrasonicCm</span>(<span class="kw">int</span> trigPin, <span class="kw">int</span> echoPin) {
   digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
+  delayMicroseconds(<span class="nb">2</span>);
   digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
+  delayMicroseconds(<span class="nb">10</span>);
   digitalWrite(trigPin, LOW);
-  long duration = pulseIn(echoPin, HIGH, 25000); // 25 ms timeout
-  if (duration == 0) return 100.0;       
-  return duration * 0.0343 / 2.0;
+  <span class="kw">long</span> duration = pulseIn(echoPin, HIGH, <span class="nb">25000</span>);
+  <span class="kw">if</span> (duration == <span class="nb">0</span>) <span class="kw">return</span> <span class="nb">100.0</span>;
+  <span class="kw">return</span> duration * <span class="nb">0.0343</span> / <span class="nb">2.0</span>;
 }
-
-// Motor helpers
-void motorLeft(int speed) {
-  if (speed >= 0) {
-    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
-  } else {
-    digitalWrite(IN1, LOW);  digitalWrite(IN2, HIGH);
+ 
+<span class="kw">void</span> <span class="fn">motorLeft</span>(<span class="kw">int</span> speed) {
+  <span class="kw">if</span> (speed >= <span class="nb">0</span>) {
+    digitalWrite(<span class="nb">IN1</span>, HIGH); digitalWrite(<span class="nb">IN2</span>, LOW);
+  } <span class="kw">else</span> {
+    digitalWrite(<span class="nb">IN1</span>, LOW);  digitalWrite(<span class="nb">IN2</span>, HIGH);
     speed = -speed;
   }
-  analogWrite(ENA, constrain(speed, 0, 255));
+  analogWrite(<span class="nb">ENA</span>, constrain(speed, <span class="nb">0</span>, <span class="nb">255</span>));
 }
-
-void motorRight(int speed) {
-  if (speed >= 0) {
-    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
-  } else {
-    digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH);
+ 
+<span class="kw">void</span> <span class="fn">motorRight</span>(<span class="kw">int</span> speed) {
+  <span class="kw">if</span> (speed >= <span class="nb">0</span>) {
+    digitalWrite(<span class="nb">IN3</span>, HIGH); digitalWrite(<span class="nb">IN4</span>, LOW);
+  } <span class="kw">else</span> {
+    digitalWrite(<span class="nb">IN3</span>, LOW);  digitalWrite(<span class="nb">IN4</span>, HIGH);
     speed = -speed;
   }
-  analogWrite(ENB, constrain(speed, 0, 255));
+  analogWrite(<span class="nb">ENB</span>, constrain(speed, <span class="nb">0</span>, <span class="nb">255</span>));
 }
-
-void driveForward(int spd = BASE_SPEED) {
-  motorLeft(spd);
-  motorRight(spd);
+ 
+<span class="kw">void</span> <span class="fn">driveForward</span>(<span class="kw">int</span> spd = <span class="nb">BASE_SPEED</span>) {
+  <span class="fn">motorLeft</span>(spd); <span class="fn">motorRight</span>(spd);
 }
-
-void stopMotors() {
-  motorLeft(0); motorRight(0);
+ 
+<span class="kw">void</span> <span class="fn">stopMotors</span>() {
+  <span class="fn">motorLeft</span>(<span class="nb">0</span>); <span class="fn">motorRight</span>(<span class="nb">0</span>);
 }
-
-void turnLeft(int ms) {
-  motorLeft(-TURN_SPEED);
-  motorRight(TURN_SPEED);
-  delay(ms);
-  stopMotors();
-  delay(100);
+ 
+<span class="kw">void</span> <span class="fn">turnLeft</span>(<span class="kw">int</span> ms) {
+  <span class="fn">motorLeft</span>(-<span class="nb">TURN_SPEED</span>); <span class="fn">motorRight</span>(<span class="nb">TURN_SPEED</span>);
+  delay(ms); <span class="fn">stopMotors</span>(); delay(<span class="nb">100</span>);
 }
-
-void turnRight(int ms) {
-  motorLeft(TURN_SPEED);
-  motorRight(-TURN_SPEED);
-  delay(ms);
-  stopMotors();
-  delay(100);
+ 
+<span class="kw">void</span> <span class="fn">turnRight</span>(<span class="kw">int</span> ms) {
+  <span class="fn">motorLeft</span>(<span class="nb">TURN_SPEED</span>); <span class="fn">motorRight</span>(-<span class="nb">TURN_SPEED</span>);
+  delay(ms); <span class="fn">stopMotors</span>(); delay(<span class="nb">100</span>);
 }
-
-void steerLeft() {
-  motorLeft(BASE_SPEED - 40);
-  motorRight(BASE_SPEED);
+ 
+<span class="kw">void</span> <span class="fn">steerLeft</span>() {
+  <span class="fn">motorLeft</span>(<span class="nb">BASE_SPEED</span> - <span class="nb">40</span>); <span class="fn">motorRight</span>(<span class="nb">BASE_SPEED</span>);
 }
-
-void steerRight() {
-  motorLeft(BASE_SPEED);
-  motorRight(BASE_SPEED - 40);
+ 
+<span class="kw">void</span> <span class="fn">steerRight</span>() {
+  <span class="fn">motorLeft</span>(<span class="nb">BASE_SPEED</span>); <span class="fn">motorRight</span>(<span class="nb">BASE_SPEED</span> - <span class="nb">40</span>);
 }
-
-void setup() {
-  // Motor pins
-  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(ENA, OUTPUT);
-  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT); pinMode(ENB, OUTPUT);
-
-  // Ultrasonic pins
-  pinMode(TRIG_F, OUTPUT); pinMode(ECHO_F, INPUT);
-  pinMode(TRIG_L, OUTPUT); pinMode(ECHO_L, INPUT);
-  pinMode(TRIG_R, OUTPUT); pinMode(ECHO_R, INPUT);
-
-  stopMotors();
-  Serial.begin(9600);
-  delay(1000);
+ 
+<span class="kw">void</span> <span class="fn">setup</span>() {
+  pinMode(<span class="nb">IN1</span>, OUTPUT); pinMode(<span class="nb">IN2</span>, OUTPUT); pinMode(<span class="nb">ENA</span>, OUTPUT);
+  pinMode(<span class="nb">IN3</span>, OUTPUT); pinMode(<span class="nb">IN4</span>, OUTPUT); pinMode(<span class="nb">ENB</span>, OUTPUT);
+  pinMode(<span class="nb">TRIG_F</span>, OUTPUT); pinMode(<span class="nb">ECHO_F</span>, INPUT);
+  pinMode(<span class="nb">TRIG_L</span>, OUTPUT); pinMode(<span class="nb">ECHO_L</span>, INPUT);
+  pinMode(<span class="nb">TRIG_R</span>, OUTPUT); pinMode(<span class="nb">ECHO_R</span>, INPUT);
+  <span class="fn">stopMotors</span>();
+  Serial.begin(<span class="nb">9600</span>);
+  delay(<span class="nb">1000</span>);
 }
-
-void loop() {
-  float frontDist = ultrasonicCm(TRIG_F, ECHO_F);
-  float leftDist  = ultrasonicCm(TRIG_L, ECHO_L);
-  float rightDist = ultrasonicCm(TRIG_R, ECHO_R);
-
-  // Debug
-  Serial.print("F:"); Serial.print(frontDist);
-  Serial.print(" R:"); Serial.print(rightDist);
-  Serial.print(" L:"); Serial.println(leftDist);
-
-
-
-  if (frontDist < FRONT_STOP_CM && leftDist < SHARP_STOP_CM) {
-    stopMotors();
-    delay(100);
-    turnRight(500);
-    return;
+ 
+<span class="kw">void</span> <span class="fn">loop</span>() {
+  <span class="kw">float</span> frontDist = <span class="fn">ultrasonicCm</span>(<span class="nb">TRIG_F</span>, <span class="nb">ECHO_F</span>);
+  <span class="kw">float</span> leftDist  = <span class="fn">ultrasonicCm</span>(<span class="nb">TRIG_L</span>, <span class="nb">ECHO_L</span>);
+  <span class="kw">float</span> rightDist = <span class="fn">ultrasonicCm</span>(<span class="nb">TRIG_R</span>, <span class="nb">ECHO_R</span>);
+ 
+  Serial.print(<span class="st">"F:"</span>); Serial.print(frontDist);
+  Serial.print(<span class="st">" R:"</span>); Serial.print(rightDist);
+  Serial.print(<span class="st">" L:"</span>); Serial.println(leftDist);
+ 
+  <span class="kw">if</span> (frontDist &lt; <span class="nb">FRONT_STOP_CM</span> &amp;&amp; leftDist &lt; <span class="nb">SHARP_STOP_CM</span>) {
+    <span class="fn">stopMotors</span>(); delay(<span class="nb">100</span>); <span class="fn">turnRight</span>(<span class="nb">500</span>); <span class="kw">return</span>;
   }
-
-  if (frontDist < FRONT_STOP_CM) {
-    // Front blocked, turn right
-    stopMotors();
-    delay(100);
-    turnRight(500);
-    return;
+ 
+  <span class="kw">if</span> (frontDist &lt; <span class="nb">FRONT_STOP_CM</span>) {
+    <span class="fn">stopMotors</span>(); delay(<span class="nb">100</span>); <span class="fn">turnRight</span>(<span class="nb">500</span>); <span class="kw">return</span>;
   }
-
-  if (rightDist < WALL_TOO_CLOSE) {
-    steerLeft();
-    return;
+ 
+  <span class="kw">if</span> (rightDist &lt; <span class="nb">WALL_TOO_CLOSE</span>) {
+    <span class="fn">steerLeft</span>(); <span class="kw">return</span>;
   }
-
-  if (rightDist > WALL_TOO_FAR) {
-    // Opening on the right: turn right into it
-    stopMotors();
-    delay(50);
-    turnRight(450);
-    driveForward();
-    delay(150);
-    return;
+ 
+  <span class="kw">if</span> (rightDist &gt; <span class="nb">WALL_TOO_FAR</span>) {
+    <span class="fn">stopMotors</span>(); delay(<span class="nb">50</span>);
+    <span class="fn">turnRight</span>(<span class="nb">450</span>);
+    <span class="fn">driveForward</span>(); delay(<span class="nb">150</span>); <span class="kw">return</span>;
   }
-
-  // keep right wall at WALL_FOLLOW_CM
-  float error = rightDist - WALL_FOLLOW_CM;
-  if (error > 2) {
-    steerRight();
-  } else if (error < -2) {
-    steerLeft();
-  } else {
-    driveForward();
+ 
+  <span class="kw">float</span> error = rightDist - <span class="nb">WALL_FOLLOW_CM</span>;
+  <span class="kw">if</span> (error &gt; <span class="nb">2</span>) {
+    <span class="fn">steerRight</span>();
+  } <span class="kw">else if</span> (error &lt; -<span class="nb">2</span>) {
+    <span class="fn">steerLeft</span>();
+  } <span class="kw">else</span> {
+    <span class="fn">driveForward</span>();
   }
-}
+}</code></pre>
+      </div>
+    </div>
+ 
+  </div>
+ 
+  <footer>&copy; 2026 Lebron Subrado. All rights reserved.</footer>
+ 
+</body>
+</html>
+ 
