@@ -1,175 +1,319 @@
-// ===== MOTOR PINS =====
-#define ENA 5
-#define IN1 8
-#define IN2 9
-#define ENB 6
-#define IN3 10
-#define IN4 11
-
-// ===== IR SENSORS =====
-#define IR_FRONT_LEFT  3
-#define IR_FRONT_RIGHT 4
-#define IR_REAR 7
-
-// ===== ULTRASONIC =====
-#define TRIG_PIN A1
-#define ECHO_PIN A2
-
-// ===== SETTINGS =====
-#define SPEED_ROAM 90
-#define SPEED_ATTACK 255
-#define ENEMY_DISTANCE 40 
-
-#define WHITE HIGH    // line sensor sees white
-#define BLACK LOW   // safe area
-
-unsigned long lastEnemyTime = 0;
-
-void setup() {
-  Serial.begin(9600);
-
-  // Motors
-  pinMode(ENA, OUTPUT);
-  pinMode(IN1, OUTPUT);
-  pinMode(IN2, OUTPUT);
-  pinMode(ENB, OUTPUT);
-  pinMode(IN3, OUTPUT);
-  pinMode(IN4, OUTPUT);
-
-  // IR Sensors
-  pinMode(IR_FRONT_LEFT, INPUT);
-  pinMode(IR_FRONT_RIGHT, INPUT);
-  pinMode(IR_REAR, INPUT);
-
-  // Ultrasonic
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-
-  stopMotors();
-  delay(3000); // startup delay
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SumobotREAL — Lebron Subrado</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --w:#fff; --bg:#f9f8f6; --border:#e5e2db; --text:#1a1a1a; --muted:#8a8680; --accent:#c8956c; --code-bg:#1a1a2e; }
+ 
+    body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); }
+ 
+    header {
+      background:var(--w); border-bottom:1px solid var(--border);
+      padding:20px 60px; display:flex; align-items:center; justify-content:space-between;
+    }
+    header a {
+      text-decoration:none; color:var(--muted); font-size:13px;
+      text-transform:uppercase; letter-spacing:.08em;
+      display:flex; align-items:center; gap:8px; transition:.2s;
+    }
+    header a:hover { color:var(--accent); }
+ 
+    .hero {
+      background:var(--w); border-bottom:1px solid var(--border);
+      padding:60px 60px 50px;
+    }
+    .tag { font-size:11px; letter-spacing:.15em; text-transform:uppercase; color:var(--accent); margin-bottom:12px; }
+    h1 { font-family:'Playfair Display',serif; font-size:clamp(28px,4vw,48px); margin-bottom:16px; }
+    .desc { color:var(--muted); font-size:15px; line-height:1.8; max-width:640px; }
+ 
+    .badges { display:flex; gap:10px; flex-wrap:wrap; margin-top:24px; }
+    .badge {
+      background:var(--bg); border:1px solid var(--border);
+      border-radius:99px; padding:6px 16px;
+      font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace;
+    }
+ 
+    .content { max-width:900px; margin:0 auto; padding:60px; }
+ 
+    .section { margin-bottom:48px; }
+    .section h2 { font-family:'Playfair Display',serif; font-size:22px; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+ 
+    .features { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:16px; }
+    .feature {
+      background:var(--w); border:1px solid var(--border); border-radius:10px;
+      padding:20px; display:flex; flex-direction:column; gap:8px;
+    }
+    .feature .icon { font-size:22px; }
+    .feature h3 { font-size:14px; font-weight:500; }
+    .feature p { font-size:13px; color:var(--muted); line-height:1.6; }
+ 
+    .pin-table { width:100%; border-collapse:collapse; font-size:14px; }
+    .pin-table th {
+      background:var(--text); color:var(--w);
+      padding:10px 16px; text-align:left; font-weight:500;
+    }
+    .pin-table td { padding:10px 16px; border-bottom:1px solid var(--border); }
+    .pin-table tr:last-child td { border-bottom:none; }
+    .pin-table tr:nth-child(even) td { background:#f3f1ee; }
+    .pin-table td:first-child { font-family:'JetBrains Mono',monospace; color:var(--accent); font-size:13px; }
+ 
+    .code-wrapper {
+      background:var(--code-bg); border-radius:12px; overflow:hidden;
+      border:1px solid #2a2a3e;
+    }
+    .code-header {
+      background:#16213e; padding:12px 20px;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .code-header span { font-family:'JetBrains Mono',monospace; font-size:13px; color:#a0a0b0; }
+    .code-dots { display:flex; gap:6px; }
+    .code-dots span { width:12px; height:12px; border-radius:50%; }
+    .code-dots span:nth-child(1) { background:#ff5f57; }
+    .code-dots span:nth-child(2) { background:#febc2e; }
+    .code-dots span:nth-child(3) { background:#28c840; }
+    pre {
+      padding:28px; overflow-x:auto; font-family:'JetBrains Mono',monospace;
+      font-size:13px; line-height:1.7; color:#cdd6f4;
+      max-height:560px; overflow-y:auto;
+    }
+ 
+    .kw  { color:#cba6f7; }
+    .cm  { color:#6c7086; font-style:italic; }
+    .st  { color:#a6e3a1; }
+    .nm  { color:#89b4fa; }
+    .fn  { color:#89dceb; }
+    .nb  { color:#fab387; }
+    .pp  { color:#f38ba8; }
+ 
+    footer {
+      background:var(--w); border-top:1px solid var(--border);
+      padding:20px; text-align:center; color:var(--muted); font-size:13px;
+    }
+  </style>
+</head>
+<body>
+ 
+  <header>
+    <a href="https://schrodinger-leb.github.io/index/">
+      <span>←</span> Back to Portfolio
+    </a>
+    <span style="font-size:13px; color:var(--muted);">SumobotREALreversed.ino</span>
+  </header>
+ 
+  <div class="hero">
+    <p class="tag">Project — Robotics</p>
+    <h1>SumoBot REAL</h1>
+    <p class="desc">
+      A fully autonomous sumobot with aggressive attack logic. Uses three IR sensors
+      (front-left, front-right, rear) for edge detection and an ultrasonic sensor
+      for enemy targeting. Enemy detection takes priority over everything — the bot
+      charges at full speed (255) the moment it spots an opponent within 40cm,
+      and keeps attacking for 700ms even after losing sight.
+    </p>
+    <div class="badges">
+      <span class="badge">Arduino</span>
+      <span class="badge">C++</span>
+      <span class="badge">3x IR Sensors</span>
+      <span class="badge">Ultrasonic</span>
+      <span class="badge">L298N</span>
+      <span class="badge">Full Auto</span>
+    </div>
+  </div>
+ 
+  <div class="content">
+ 
+    <div class="section">
+      <h2>Features</h2>
+      <div class="features">
+        <div class="feature">
+          <span class="icon">💥</span>
+          <h3>Full Speed Attack</h3>
+          <p>Drives at PWM 255 (max speed) the instant an enemy is detected within 40cm.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">⏱️</span>
+          <h3>Attack Persistence</h3>
+          <p>Continues charging for 700ms after losing sight of the enemy to prevent escape.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">⬛</span>
+          <h3>3-Point Edge Detection</h3>
+          <p>Front-left, front-right, and rear IR sensors cover all sides for ring boundary detection.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🔁</span>
+          <h3>Rear Edge Handling</h3>
+          <p>Detects when pushed to the rear edge and drives forward aggressively to escape.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🔍</span>
+          <h3>Search Mode</h3>
+          <p>Continuously rotates left at roam speed when no enemy is detected, scanning the ring.</p>
+        </div>
+        <div class="feature">
+          <span class="icon">🐛</span>
+          <h3>Serial Debug</h3>
+          <p>Prints distance and all IR sensor states to Serial Monitor every loop for live tuning.</p>
+        </div>
+      </div>
+    </div>
+ 
+    <div class="section">
+      <h2>Pin Configuration</h2>
+      <div style="background:var(--w); border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+        <table class="pin-table">
+          <thead>
+            <tr><th>Pin</th><th>Component</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ENA / IN1 / IN2 (5, 8, 9)</td><td>L298N Motor Driver</td><td>Left motor control</td></tr>
+            <tr><td>ENB / IN3 / IN4 (6, 10, 11)</td><td>L298N Motor Driver</td><td>Right motor control</td></tr>
+            <tr><td>IR_FRONT_LEFT (3)</td><td>IR Sensor</td><td>Front-left edge detection</td></tr>
+            <tr><td>IR_FRONT_RIGHT (4)</td><td>IR Sensor</td><td>Front-right edge detection</td></tr>
+            <tr><td>IR_REAR (7)</td><td>IR Sensor</td><td>Rear edge detection</td></tr>
+            <tr><td>TRIG_PIN / ECHO_PIN (A1, A2)</td><td>HC-SR04</td><td>Enemy distance detection</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+ 
+    <div class="section">
+      <h2>Source Code</h2>
+      <div class="code-wrapper">
+        <div class="code-header">
+          <div class="code-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <span>SumobotREALreversed.ino</span>
+        </div>
+        <pre><code><span class="cm">// ===== MOTOR PINS =====</span>
+<span class="pp">#define</span> <span class="nb">ENA</span> <span class="nb">5</span>
+<span class="pp">#define</span> <span class="nb">IN1</span> <span class="nb">8</span>
+<span class="pp">#define</span> <span class="nb">IN2</span> <span class="nb">9</span>
+<span class="pp">#define</span> <span class="nb">ENB</span> <span class="nb">6</span>
+<span class="pp">#define</span> <span class="nb">IN3</span> <span class="nb">10</span>
+<span class="pp">#define</span> <span class="nb">IN4</span> <span class="nb">11</span>
+<span class="cm">// ===== IR SENSORS =====</span>
+<span class="pp">#define</span> <span class="nb">IR_FRONT_LEFT</span>  <span class="nb">3</span>
+<span class="pp">#define</span> <span class="nb">IR_FRONT_RIGHT</span> <span class="nb">4</span>
+<span class="pp">#define</span> <span class="nb">IR_REAR</span> <span class="nb">7</span>
+<span class="cm">// ===== ULTRASONIC =====</span>
+<span class="pp">#define</span> <span class="nb">TRIG_PIN</span> <span class="nb">A1</span>
+<span class="pp">#define</span> <span class="nb">ECHO_PIN</span> <span class="nb">A2</span>
+<span class="cm">// ===== SETTINGS =====</span>
+<span class="pp">#define</span> <span class="nb">SPEED_ROAM</span>   <span class="nb">90</span>
+<span class="pp">#define</span> <span class="nb">SPEED_ATTACK</span> <span class="nb">255</span>
+<span class="pp">#define</span> <span class="nb">ENEMY_DISTANCE</span> <span class="nb">40</span>
+<span class="pp">#define</span> <span class="nb">WHITE</span> HIGH
+<span class="pp">#define</span> <span class="nb">BLACK</span> LOW
+ 
+<span class="kw">unsigned long</span> lastEnemyTime = <span class="nb">0</span>;
+ 
+<span class="kw">void</span> <span class="fn">setup</span>() {
+  Serial.begin(<span class="nb">9600</span>);
+  pinMode(<span class="nb">ENA</span>, OUTPUT); pinMode(<span class="nb">IN1</span>, OUTPUT); pinMode(<span class="nb">IN2</span>, OUTPUT);
+  pinMode(<span class="nb">ENB</span>, OUTPUT); pinMode(<span class="nb">IN3</span>, OUTPUT); pinMode(<span class="nb">IN4</span>, OUTPUT);
+  pinMode(<span class="nb">IR_FRONT_LEFT</span>,  INPUT);
+  pinMode(<span class="nb">IR_FRONT_RIGHT</span>, INPUT);
+  pinMode(<span class="nb">IR_REAR</span>, INPUT);
+  pinMode(<span class="nb">TRIG_PIN</span>, OUTPUT);
+  pinMode(<span class="nb">ECHO_PIN</span>, INPUT);
+  <span class="fn">stopMotors</span>();
+  delay(<span class="nb">3000</span>); <span class="cm">// startup delay</span>
 }
-
-void loop() {
-  bool frontLeft = digitalRead(IR_FRONT_LEFT);
-  bool frontRight = digitalRead(IR_FRONT_RIGHT);
-  bool rear = digitalRead(IR_REAR);
-
-  int distance = getDistance();
-  unsigned long now = millis();
-
-  // ===== DEBUG =====
-  Serial.print("D:");
-  Serial.print(distance);
-  Serial.print(" FL:");
-  Serial.print(frontLeft);
-  Serial.print(" FR:");
-  Serial.print(frontRight);
-  Serial.print(" R:");
-  Serial.println(rear);
-
-  // ===== ENEMY DETECTION FIRST (OVER EDGE!) =====
-  if (distance > 0 && distance <= ENEMY_DISTANCE) {
+ 
+<span class="kw">void</span> <span class="fn">loop</span>() {
+  <span class="kw">bool</span> frontLeft  = digitalRead(<span class="nb">IR_FRONT_LEFT</span>);
+  <span class="kw">bool</span> frontRight = digitalRead(<span class="nb">IR_FRONT_RIGHT</span>);
+  <span class="kw">bool</span> rear       = digitalRead(<span class="nb">IR_REAR</span>);
+  <span class="kw">int</span>  distance   = <span class="fn">getDistance</span>();
+  <span class="kw">unsigned long</span> now = millis();
+ 
+  <span class="cm">// ===== DEBUG =====</span>
+  Serial.print(<span class="st">"D:"</span>); Serial.print(distance);
+  Serial.print(<span class="st">" FL:"</span>); Serial.print(frontLeft);
+  Serial.print(<span class="st">" FR:"</span>); Serial.print(frontRight);
+  Serial.print(<span class="st">" R:"</span>); Serial.println(rear);
+ 
+  <span class="cm">// ===== ENEMY DETECTION (priority over edge!) =====</span>
+  <span class="kw">if</span> (distance > <span class="nb">0</span> &amp;&amp; distance &lt;= <span class="nb">ENEMY_DISTANCE</span>) {
     lastEnemyTime = now;
-    forward(SPEED_ATTACK); // FULL SPEED ATTACK
-    return;
+    <span class="fn">forward</span>(<span class="nb">SPEED_ATTACK</span>); <span class="kw">return</span>;
   }
-
-  if (now - lastEnemyTime < 700) {
-    forward(SPEED_ATTACK);
-    return;
+  <span class="kw">if</span> (now - lastEnemyTime &lt; <span class="nb">700</span>) {
+    <span class="fn">forward</span>(<span class="nb">SPEED_ATTACK</span>); <span class="kw">return</span>;
   }
-
-  // ===== EDGE DETECTION =====
-  if (frontLeft == WHITE && frontRight == WHITE) {
-    backward(SPEED_ATTACK);
-    delay(200);
-    turnRight(SPEED_ATTACK);
-    delay(250);
-    return;
+ 
+  <span class="cm">// ===== EDGE DETECTION =====</span>
+  <span class="kw">if</span> (frontLeft == <span class="nb">WHITE</span> &amp;&amp; frontRight == <span class="nb">WHITE</span>) {
+    <span class="fn">backward</span>(<span class="nb">SPEED_ATTACK</span>); delay(<span class="nb">200</span>);
+    <span class="fn">turnRight</span>(<span class="nb">SPEED_ATTACK</span>); delay(<span class="nb">250</span>); <span class="kw">return</span>;
   }
-
-  if (frontLeft == WHITE) {
-    backward(SPEED_ATTACK);
-    delay(150);
-    turnRight(SPEED_ATTACK);
-    delay(200);
-    return;
+  <span class="kw">if</span> (frontLeft == <span class="nb">WHITE</span>) {
+    <span class="fn">backward</span>(<span class="nb">SPEED_ATTACK</span>); delay(<span class="nb">150</span>);
+    <span class="fn">turnRight</span>(<span class="nb">SPEED_ATTACK</span>); delay(<span class="nb">200</span>); <span class="kw">return</span>;
   }
-
-  if (frontRight == WHITE) {
-    backward(SPEED_ATTACK);
-    delay(150);
-    turnLeft(SPEED_ATTACK);
-    delay(200);
-    return;
+  <span class="kw">if</span> (frontRight == <span class="nb">WHITE</span>) {
+    <span class="fn">backward</span>(<span class="nb">SPEED_ATTACK</span>); delay(<span class="nb">150</span>);
+    <span class="fn">turnLeft</span>(<span class="nb">SPEED_ATTACK</span>);  delay(<span class="nb">200</span>); <span class="kw">return</span>;
   }
-
-  if (rear == WHITE) {
-    forward(SPEED_ATTACK);
-    delay(200);
-    return;
+  <span class="kw">if</span> (rear == <span class="nb">WHITE</span>) {
+    <span class="fn">forward</span>(<span class="nb">SPEED_ATTACK</span>); delay(<span class="nb">200</span>); <span class="kw">return</span>;
   }
-
-  // ===== SEARCH MODE =====
-  turnLeft(SPEED_ROAM);
+ 
+  <span class="cm">// ===== SEARCH MODE =====</span>
+  <span class="fn">turnLeft</span>(<span class="nb">SPEED_ROAM</span>);
 }
-
-// ===== ULTRASONIC =====
-int getDistance() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
-  if (duration == 0) return -1;
-
-  return duration * 0.034 / 2; // cm
+ 
+<span class="kw">int</span> <span class="fn">getDistance</span>() {
+  digitalWrite(<span class="nb">TRIG_PIN</span>, LOW);  delayMicroseconds(<span class="nb">2</span>);
+  digitalWrite(<span class="nb">TRIG_PIN</span>, HIGH); delayMicroseconds(<span class="nb">10</span>);
+  digitalWrite(<span class="nb">TRIG_PIN</span>, LOW);
+  <span class="kw">long</span> duration = pulseIn(<span class="nb">ECHO_PIN</span>, HIGH, <span class="nb">30000</span>);
+  <span class="kw">if</span> (duration == <span class="nb">0</span>) <span class="kw">return</span> -<span class="nb">1</span>;
+  <span class="kw">return</span> duration * <span class="nb">0.034</span> / <span class="nb">2</span>;
 }
-
-// ===== MOTOR FUNCTIONS =====
-void forward(int spd) {
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, HIGH);
-  digitalWrite(IN4, LOW);
-  analogWrite(ENA, spd);
-  analogWrite(ENB, spd);
+ 
+<span class="kw">void</span> <span class="fn">forward</span>(<span class="kw">int</span> spd) {
+  digitalWrite(<span class="nb">IN1</span>, HIGH); digitalWrite(<span class="nb">IN2</span>, LOW);
+  digitalWrite(<span class="nb">IN3</span>, HIGH); digitalWrite(<span class="nb">IN4</span>, LOW);
+  analogWrite(<span class="nb">ENA</span>, spd);   analogWrite(<span class="nb">ENB</span>, spd);
 }
-
-void backward(int spd) {
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, HIGH);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, HIGH);
-  analogWrite(ENA, spd);
-  analogWrite(ENB, spd);
+ 
+<span class="kw">void</span> <span class="fn">backward</span>(<span class="kw">int</span> spd) {
+  digitalWrite(<span class="nb">IN1</span>, LOW);  digitalWrite(<span class="nb">IN2</span>, HIGH);
+  digitalWrite(<span class="nb">IN3</span>, LOW);  digitalWrite(<span class="nb">IN4</span>, HIGH);
+  analogWrite(<span class="nb">ENA</span>, spd);   analogWrite(<span class="nb">ENB</span>, spd);
 }
-
-void turnLeft(int spd) {
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, HIGH);
-  digitalWrite(IN3, HIGH);
-  digitalWrite(IN4, LOW);
-  analogWrite(ENA, spd);
-  analogWrite(ENB, spd);
+ 
+<span class="kw">void</span> <span class="fn">turnLeft</span>(<span class="kw">int</span> spd) {
+  digitalWrite(<span class="nb">IN1</span>, LOW);  digitalWrite(<span class="nb">IN2</span>, HIGH);
+  digitalWrite(<span class="nb">IN3</span>, HIGH); digitalWrite(<span class="nb">IN4</span>, LOW);
+  analogWrite(<span class="nb">ENA</span>, spd);   analogWrite(<span class="nb">ENB</span>, spd);
 }
-
-void turnRight(int spd) {
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, HIGH);
-  analogWrite(ENA, spd);
-  analogWrite(ENB, spd);
+ 
+<span class="kw">void</span> <span class="fn">turnRight</span>(<span class="kw">int</span> spd) {
+  digitalWrite(<span class="nb">IN1</span>, HIGH); digitalWrite(<span class="nb">IN2</span>, LOW);
+  digitalWrite(<span class="nb">IN3</span>, LOW);  digitalWrite(<span class="nb">IN4</span>, HIGH);
+  analogWrite(<span class="nb">ENA</span>, spd);   analogWrite(<span class="nb">ENB</span>, spd);
 }
-
-void stopMotors() {
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, LOW);
-  analogWrite(ENA, 0);
-  analogWrite(ENB, 0);
-}
+ 
+<span class="kw">void</span> <span class="fn">stopMotors</span>() {
+  digitalWrite(<span class="nb">IN1</span>, LOW); digitalWrite(<span class="nb">IN2</span>, LOW);
+  digitalWrite(<span class="nb">IN3</span>, LOW); digitalWrite(<span class="nb">IN4</span>, LOW);
+  analogWrite(<span class="nb">ENA</span>, <span class="nb">0</span>);    analogWrite(<span class="nb">ENB</span>, <span class="nb">0</span>);
+}</code></pre>
+      </div>
+    </div>
+ 
+  </div>
+ 
+  <footer>&copy; 2026 Lebron Subrado. All rights reserved.</footer>
+ 
+</body>
+</html>
+ 
