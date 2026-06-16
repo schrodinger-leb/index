@@ -1,0 +1,175 @@
+// ===== MOTOR PINS =====
+#define ENA 5
+#define IN1 8
+#define IN2 9
+#define ENB 6
+#define IN3 10
+#define IN4 11
+
+// ===== IR SENSORS =====
+#define IR_FRONT_LEFT  3
+#define IR_FRONT_RIGHT 4
+#define IR_REAR 7
+
+// ===== ULTRASONIC =====
+#define TRIG_PIN A1
+#define ECHO_PIN A2
+
+// ===== SETTINGS =====
+#define SPEED_ROAM 90
+#define SPEED_ATTACK 255
+#define ENEMY_DISTANCE 40 
+
+#define WHITE HIGH    // line sensor sees white
+#define BLACK LOW   // safe area
+
+unsigned long lastEnemyTime = 0;
+
+void setup() {
+  Serial.begin(9600);
+
+  // Motors
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(ENB, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  // IR Sensors
+  pinMode(IR_FRONT_LEFT, INPUT);
+  pinMode(IR_FRONT_RIGHT, INPUT);
+  pinMode(IR_REAR, INPUT);
+
+  // Ultrasonic
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  stopMotors();
+  delay(3000); // startup delay
+}
+
+void loop() {
+  bool frontLeft = digitalRead(IR_FRONT_LEFT);
+  bool frontRight = digitalRead(IR_FRONT_RIGHT);
+  bool rear = digitalRead(IR_REAR);
+
+  int distance = getDistance();
+  unsigned long now = millis();
+
+  // ===== DEBUG =====
+  Serial.print("D:");
+  Serial.print(distance);
+  Serial.print(" FL:");
+  Serial.print(frontLeft);
+  Serial.print(" FR:");
+  Serial.print(frontRight);
+  Serial.print(" R:");
+  Serial.println(rear);
+
+  // ===== ENEMY DETECTION FIRST (OVER EDGE!) =====
+  if (distance > 0 && distance <= ENEMY_DISTANCE) {
+    lastEnemyTime = now;
+    forward(SPEED_ATTACK); // FULL SPEED ATTACK
+    return;
+  }
+
+  if (now - lastEnemyTime < 700) {
+    forward(SPEED_ATTACK);
+    return;
+  }
+
+  // ===== EDGE DETECTION =====
+  if (frontLeft == WHITE && frontRight == WHITE) {
+    backward(SPEED_ATTACK);
+    delay(200);
+    turnRight(SPEED_ATTACK);
+    delay(250);
+    return;
+  }
+
+  if (frontLeft == WHITE) {
+    backward(SPEED_ATTACK);
+    delay(150);
+    turnRight(SPEED_ATTACK);
+    delay(200);
+    return;
+  }
+
+  if (frontRight == WHITE) {
+    backward(SPEED_ATTACK);
+    delay(150);
+    turnLeft(SPEED_ATTACK);
+    delay(200);
+    return;
+  }
+
+  if (rear == WHITE) {
+    forward(SPEED_ATTACK);
+    delay(200);
+    return;
+  }
+
+  // ===== SEARCH MODE =====
+  turnLeft(SPEED_ROAM);
+}
+
+// ===== ULTRASONIC =====
+int getDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  if (duration == 0) return -1;
+
+  return duration * 0.034 / 2; // cm
+}
+
+// ===== MOTOR FUNCTIONS =====
+void forward(int spd) {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, spd);
+  analogWrite(ENB, spd);
+}
+
+void backward(int spd) {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, spd);
+  analogWrite(ENB, spd);
+}
+
+void turnLeft(int spd) {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, spd);
+  analogWrite(ENB, spd);
+}
+
+void turnRight(int spd) {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, spd);
+  analogWrite(ENB, spd);
+}
+
+void stopMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+}

@@ -1,0 +1,455 @@
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfInt;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.videoio.VideoCapture;
+import org.opencv.videoio.Videoio;
+import org.opencv.highgui.HighGui;
+ 
+import java.net.Socket;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
+ 
+public class HandTracking {
+ 
+    static {
+        System.load("C:\\opencv\\build\\java\\x64\\opencv_java4120.dll");
+        System.setProperty("java.awt.headless", "false");
+    }
+ 
+    //Commands
+    static final byte CMD_FORWARD  = 'F';
+    static final byte CMD_BACKWARD = 'B';
+    static final byte CMD_LEFT     = 'L';
+    static final byte CMD_RIGHT    = 'R';
+    static final byte CMD_STOP     = 'S';
+ 
+    //Mode select
+    static final byte CMD_MODE_MENU       = '0';
+    static final byte CMD_MODE_SUMOBOT    = '1';
+    static final byte CMD_MODE_HOCKEYBOT  = '2';
+    static final byte CMD_MODE_MAZE       = '3';
+    static final byte CMD_MODE_GREENSTRAW = '4';
+ 
+    //Modes
+    static final int MODE_MENU       = 0;
+    static final int MODE_SUMOBOT    = 1;
+    static final int MODE_HOCKEYBOT  = 2;
+    static final int MODE_MAZE       = 3;
+    static final int MODE_GREENSTRAW = 4;
+ 
+    static int currentMode = MODE_MENU;
+ 
+    //Bridge
+    static byte lastCmd    = 0;
+    static Socket bridge;
+    static OutputStream bridgeOut;
+    static InputStream  bridgeIn;
+    static boolean autonomous = false;
+    static boolean evading    = false;
+ 
+    //Terminal input 
+    static Scanner scanner = new Scanner(System.in);
+ 
+    static void sendCommand(byte cmd) {
+        if (evading || autonomous) return;
+        if (cmd == lastCmd) return;
+        lastCmd = cmd;
+        try {
+            if (bridgeOut != null) {
+                bridgeOut.write(cmd);
+                bridgeOut.flush();
+            }
+        } catch (Exception e) {
+            System.out.println("Send error: " + e.getMessage());
+        }
+    }
+ 
+    static void sendModeSelect(byte modeCmd) {
+        try {
+            if (bridgeOut != null) {
+                bridgeOut.write(modeCmd);
+                bridgeOut.flush();
+                System.out.println("Mode sent to Arduino: " + (char) modeCmd);
+            }
+        } catch (Exception e) {
+            System.out.println("Mode send error: " + e.getMessage());
+        }
+    }
+ 
+    static void checkBridgeMessages() {
+        try {
+            if (bridgeIn != null && bridgeIn.available() > 0) {
+                int msg = bridgeIn.read();
+                if (msg == 'A') {
+                    autonomous = true;
+                    evading    = false;
+                    System.out.println("[Bridge] AUTONOMOUS MODE");
+                } else if (msg == 'M') {
+                    autonomous = false;
+                    evading    = false;
+                    lastCmd    = 0;
+                    System.out.println("[Bridge] MANUAL MODE restored");
+                } else if (msg == 'O') {
+                    evading = true;
+                    lastCmd = 0;
+                    System.out.println("[Bridge] OBSTACLE DETECTED - controls locked");
+                    try {
+                        if (bridgeOut != null) {
+                            bridgeOut.write('O');
+                            bridgeOut.flush();
+                        }
+                    } catch (Exception ex) {
+                        System.out.println("Ack send error: " + ex.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Bridge read error: " + e.getMessage());
+        }
+    }
+ 
+    static void connectBridge() {
+        try {
+            bridge    = new Socket("localhost", 5000);
+            bridgeOut = bridge.getOutputStream();
+            bridgeIn  = bridge.getInputStream();
+            System.out.println("Connected to Python BLE bridge!");
+            Thread.sleep(2000);
+        } catch (Exception e) {
+            System.out.println("WARNING: Could not connect to bridge - " + e.getMessage());
+        }
+    }
+ 
+    static void disconnectBridge() {
+        // Only reset state flags, keep socket alive for next mode
+        autonomous = false;
+        evading    = false;
+        lastCmd    = 0;
+    }
+    
+    static void disconnectBridgeOnExit() {
+        try { if (bridge != null) bridge.close(); } catch (Exception e) {}
+        bridge    = null;
+        bridgeOut = null;
+        bridgeIn  = null;
+        autonomous = false;
+        evading    = false;
+        lastCmd    = 0;
+    }
+ 
+    static byte directionToCommand(String vert, String horiz) {
+        if (horiz.equals("LEFT"))  return CMD_LEFT;
+        if (horiz.equals("RIGHT")) return CMD_RIGHT;
+        if (vert.equals("TOP"))    return CMD_FORWARD;
+        if (vert.equals("BOTTOM")) return CMD_BACKWARD;
+        return CMD_STOP;
+    }
+ 
+    // ── Print menu to terminal ────────────────────────────────
+    static void printMenu() {
+        System.out.println();
+        System.out.println("Select mode:");
+        System.out.println("1. Sumobot");
+        System.out.println("2. Hockeybot");
+        System.out.println("3. MazeSolver");
+        System.out.println("4. Project (Green Straw)");
+        System.out.println("0. Exit");
+        System.out.print("Enter choice: ");
+    }
+ 
+    static void drawGuide(Mat frame, int W, int H) {
+        int x1 = W / 3, x2 = 2 * W / 3;
+        int y1 = H / 3, y2 = 2 * H / 3;
+        Scalar gridColor = new Scalar(80, 80, 80);
+        Imgproc.line(frame, new Point(x1, 0), new Point(x1, H), gridColor, 1);
+        Imgproc.line(frame, new Point(x2, 0), new Point(x2, H), gridColor, 1);
+        Imgproc.line(frame, new Point(0, y1), new Point(W, y1), gridColor, 1);
+        Imgproc.line(frame, new Point(0, y2), new Point(W, y2), gridColor, 1);
+        Imgproc.putText(frame, "FWD",  new Point(x1+10, y1-10), Imgproc.FONT_HERSHEY_SIMPLEX, 0.5, new Scalar(0,255,0),    1);
+        Imgproc.putText(frame, "BWD",  new Point(x1+10, y2+20), Imgproc.FONT_HERSHEY_SIMPLEX, 0.5, new Scalar(0,0,255),    1);
+        Imgproc.putText(frame, "LEFT", new Point(x1-50, H/2+10), Imgproc.FONT_HERSHEY_SIMPLEX, 0.5, new Scalar(255,0,0),    1);
+        Imgproc.putText(frame, "RIGHT",new Point(x2+10, H/2+10), Imgproc.FONT_HERSHEY_SIMPLEX, 0.5, new Scalar(255,255,0), 1);
+    }
+ 
+    public static void main(String[] args) {
+        VideoCapture camera = null;  // Only initialize for manual modes
+        Mat frame = null;
+        Mat hsv   = null;
+        Mat mask  = null;
+        Mat kernel = null;
+ 
+        connectBridge();
+ 
+        boolean menuLoop = true;
+        while (menuLoop) {
+            printMenu();
+            String input = scanner.nextLine().trim();
+            int modeChoice = 0;
+            try {
+                modeChoice = Integer.parseInt(input);
+            } catch (Exception e) {
+                System.out.println("Invalid input");
+                continue;
+            }
+ 
+            //EXIT 
+            if (modeChoice == 0) {
+                menuLoop = false;
+                break;
+            }
+ 
+            //SUMOBOT
+            if (modeChoice == 1) {
+                System.out.println("\n[SUMOBOT] Running autonomous mode. IR + ultrasonic.");
+                System.out.println("[SUMOBOT] Press ENTER in terminal to return.");
+                autonomous = false; evading = false; lastCmd = 0;
+                sendModeSelect(CMD_MODE_SUMOBOT);
+                
+                System.out.println("Bot is searching for opponent...");
+                
+                boolean running = true;
+                while (running) {
+                    try {
+                        // Check if user pressed enter in terminal
+                        if (System.in.available() > 0) {
+                            System.in.read();  // consume the input
+                            running = false;
+                            break;
+                        }
+                    } catch (Exception e) {}
+                    
+                    checkBridgeMessages();
+                    Thread.yield();
+                    try { Thread.sleep(100); } catch (Exception e) {}
+                }
+ 
+                sendCommand(CMD_STOP);
+                sendModeSelect(CMD_MODE_MENU);
+                System.out.println("[SUMOBOT] Returned to menu.");
+            }
+ 
+            else if (modeChoice == 3) {
+                System.out.println("\n[MAZESOLVER] Running autonomous maze solver.");
+                System.out.println("[MAZESOLVER] Press ENTER in terminal to return.");
+                autonomous = false; evading = false; lastCmd = 0;
+                sendModeSelect(CMD_MODE_MAZE);
+                
+                System.out.println("Bot is following the right wall...");
+                
+                boolean running = true;
+                while (running) {
+                    try {
+                        // Check if user pressed enter in terminal
+                        if (System.in.available() > 0) {
+                            System.in.read();  // consume the input
+                            running = false;
+                            break;
+                        }
+                    } catch (Exception e) {}
+                    
+                    checkBridgeMessages();
+                    Thread.yield();
+                    try { Thread.sleep(100); } catch (Exception e) {}
+                }
+ 
+                sendCommand(CMD_STOP);
+                sendModeSelect(CMD_MODE_MENU);
+                System.out.println("[MAZESOLVER] Returned to menu.");
+            }
+ 
+            else if (modeChoice == 2) {
+                System.out.println("\n[HOCKEYBOT] Phone control active.");
+                System.out.println("[HOCKEYBOT] Press ENTER in terminal to return.");
+                autonomous = false; evading = false; lastCmd = 0;
+                sendModeSelect(CMD_MODE_HOCKEYBOT);
+                
+                System.out.println("Bot ready for phone control via BLE bridge...");
+                
+                boolean running = true;
+                while (running) {
+                    try {
+                        // Check if user pressed enter in terminal
+                        if (System.in.available() > 0) {
+                            System.in.read();  // consume the input
+                            running = false;
+                            break;
+                        }
+                    } catch (Exception e) {}
+                    
+                    checkBridgeMessages();
+                    Thread.yield();
+                    try { Thread.sleep(100); } catch (Exception e) {}
+                }
+ 
+                sendCommand(CMD_STOP);
+                sendModeSelect(CMD_MODE_MENU);
+            
+                System.out.println("[HOCKEYBOT] Returned to menu.");
+            }
+ 
+            //GREEN STRAW
+            else if (modeChoice == 4) {
+                // Initialize camera only for this manual mode
+                if (camera == null) {
+                    camera = new VideoCapture(0);
+                    if (!camera.isOpened()) {
+                        System.out.println("ERROR: Cannot open camera");
+                        continue;
+                    }
+                    camera.set(Videoio.CAP_PROP_FRAME_WIDTH,  640);
+                    camera.set(Videoio.CAP_PROP_FRAME_HEIGHT, 480);
+                }
+                
+                if (frame == null) {
+                    frame = new Mat();
+                    hsv   = new Mat();
+                    mask  = new Mat();
+                    kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(5, 5));
+                }
+                
+                System.out.println("\n[GREEN STRAW] Camera active. Green object tracking running.");
+                System.out.println("[GREEN STRAW] Press 'R' in the camera window to return.");
+                autonomous = false; evading = false; lastCmd = 0;
+                sendModeSelect(CMD_MODE_GREENSTRAW);
+                
+                // Prime imshow before waitKey
+                camera.read(frame);
+                if (!frame.empty()) {
+                    Imgproc.putText(frame, "GREEN STRAW - starting...", new Point(20, 30),
+                            Imgproc.FONT_HERSHEY_SIMPLEX, 0.8, new Scalar(0,255,0), 2);
+                    HighGui.imshow("Bot Controller", frame);
+                }
+ 
+                boolean running = true;
+                while (running) {
+                    int key = HighGui.waitKey(1) & 0xFF;  //Mask Windows key codes
+                    if (key == 27 || key == 'r' || key == 'R') {
+                        running = false; break;
+                    }
+ 
+                    checkBridgeMessages();
+ 
+                    if (autonomous) {
+                        Mat waitFrame = new Mat(480, 640, 16, new Scalar(0, 0, 0));
+                        Imgproc.putText(waitFrame, "GREEN STRAW - AUTONOMOUS", new Point(60, 180),
+                                Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(0, 165, 255), 2);
+                        Imgproc.putText(waitFrame, "Avoiding obstacles...", new Point(150, 240),
+                                Imgproc.FONT_HERSHEY_SIMPLEX, 0.8, new Scalar(200, 200, 200), 1);
+                        Imgproc.putText(waitFrame, "Press R to return   ESC to quit",
+                                new Point(120, 350), Imgproc.FONT_HERSHEY_SIMPLEX, 0.6,
+                                new Scalar(100, 100, 100), 1);
+                        HighGui.imshow("Bot Controller", waitFrame);
+                        continue;
+                    }
+ 
+                    if (!camera.read(frame) || frame.empty()) continue;
+                    Core.flip(frame, frame, 1);
+ 
+                    Imgproc.cvtColor(frame, hsv, Imgproc.COLOR_BGR2HSV);
+                    Core.inRange(hsv, new Scalar(35, 50, 50), new Scalar(85, 255, 255), mask);
+                    Imgproc.morphologyEx(mask, mask, Imgproc.MORPH_OPEN,  kernel);
+                    Imgproc.morphologyEx(mask, mask, Imgproc.MORPH_CLOSE, kernel);
+                    Imgproc.GaussianBlur(mask, mask, new Size(5, 5), 0);
+ 
+                    List<MatOfPoint> contours2 = new ArrayList<>();
+                    Imgproc.findContours(mask, contours2, new Mat(),
+                            Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+ 
+                    double maxArea2 = 0; MatOfPoint best2 = null;
+                    for (MatOfPoint c : contours2) {
+                        double a = Imgproc.contourArea(c);
+                        if (a > maxArea2) { maxArea2 = a; best2 = c; }
+                    }
+ 
+                    int W2 = frame.width(), H2 = frame.height();
+ 
+                    if (best2 != null && maxArea2 > 1500) {
+                        Rect r   = Imgproc.boundingRect(best2);
+                        int cx   = r.x + r.width / 2;
+                        int cy   = r.y + r.height / 2;
+                        Imgproc.rectangle(frame, r, new Scalar(0, 255, 0), 2);
+                        Imgproc.circle(frame, new Point(cx, cy), 6, new Scalar(0, 0, 255), -1);
+ 
+                        MatOfInt hullIdx = new MatOfInt();
+                        Imgproc.convexHull(best2, hullIdx);
+                        List<org.opencv.core.Point> pts = best2.toList();
+                        List<org.opencv.core.Point> hullPts = new ArrayList<>();
+                        for (int i : hullIdx.toArray()) hullPts.add(pts.get(i));
+                        MatOfPoint hullMat = new MatOfPoint();
+                        hullMat.fromList(hullPts);
+                        List<MatOfPoint> hullList = new ArrayList<>();
+                        hullList.add(hullMat);
+                        Imgproc.drawContours(frame, hullList, -1, new Scalar(255, 165, 0), 2);
+ 
+                        String horiz = cx < W2 / 3 ? "LEFT" : cx > 2 * W2 / 3 ? "RIGHT" : "CENTER";
+                        String vert  = cy < H2 / 3 ? "TOP"  : cy > 2 * H2 / 3 ? "BOTTOM" : "MIDDLE";
+ 
+                        if (!evading) {
+                            sendCommand(directionToCommand(vert, horiz));
+                        } else {
+                            Mat overlay = frame.clone();
+                            Imgproc.rectangle(overlay, new Point(0, 0), new Point(W2, H2),
+                                    new Scalar(0, 0, 180), -1);
+                            Core.addWeighted(overlay, 0.35, frame, 0.65, 0, frame);
+                            Imgproc.putText(frame, "!! OBSTACLE DETECTED !!", new Point(80, 80),
+                                    Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(0, 0, 255), 3);
+                            Imgproc.putText(frame, "Controls LOCKED", new Point(170, 130),
+                                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.8, new Scalar(255, 255, 255), 2);
+                        }
+ 
+                        if (!evading) {
+                            Imgproc.putText(frame, "GREEN STRAW - MANUAL", new Point(20, 30),
+                                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.7, new Scalar(0, 255, 0), 2);
+                            Imgproc.putText(frame, "Area: " + (int) maxArea2, new Point(20, 90),
+                                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.6, new Scalar(200, 200, 200), 1);
+                            drawGuide(frame, W2, H2);
+                        }
+ 
+                    } else {
+                        if (!evading) {
+                            sendCommand(CMD_STOP);
+                            Imgproc.putText(frame, "No object - STOP", new Point(20, 55),
+                                    Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(0, 0, 255), 2);
+                        } else {
+                            Mat overlay = frame.clone();
+                            Imgproc.rectangle(overlay, new Point(0, 0), new Point(W2, H2),
+                                    new Scalar(0, 0, 180), -1);
+                            Core.addWeighted(overlay, 0.35, frame, 0.65, 0, frame);
+                            Imgproc.putText(frame, "!! OBSTACLE DETECTED !!", new Point(80, 80),
+                                    Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(0, 0, 255), 3);
+                            Imgproc.putText(frame, "Controls LOCKED - clearing path...", new Point(90, 140),
+                                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.65, new Scalar(255, 255, 255), 2);
+                        }
+                    }
+ 
+                    Imgproc.putText(frame, "Press R to return   ESC to quit",
+                            new Point(20, H2 - 15), Imgproc.FONT_HERSHEY_SIMPLEX, 0.5,
+                            new Scalar(100, 100, 100), 1);
+                    HighGui.imshow("Bot Controller", frame);
+                }
+ 
+                sendCommand(CMD_STOP);
+                sendModeSelect(CMD_MODE_MENU);
+                HighGui.destroyAllWindows();
+                System.out.println("[GREEN STRAW] Returned to menu.");
+            }
+ 
+        } // end main while loop
+ 
+        sendCommand(CMD_STOP);
+        sendModeSelect(CMD_MODE_MENU);
+        disconnectBridgeOnExit(); 
+        if (camera != null) camera.release();
+        HighGui.destroyAllWindows();
+        System.out.println("Program closed.");
+    }
+}
